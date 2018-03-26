@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
 <style>
+
+    label {
+        display: block;
+    }
+
     .bar {
         fill: steelblue;
     }
@@ -21,6 +26,20 @@
 
 <body>
     <h1></h1>
+    <form>
+        <label>
+            <input type="radio" name="mode" value="grouped"> Grouped</label>
+        <label>
+            <input type="radio" name="mode" value="stacked" checked> Stacked</label>
+        <label>
+            <input type="radio" name="mode" value="grouped"> Grouped</label>
+        <label>
+            <input type="radio" name="mode" value="stacked"> Stacked</label>
+        <label>
+            <input type="radio" name="mode" value="grouped"> Grouped</label>
+        <label>
+            <input type="radio" name="mode" value="stacked"> Stacked</label>
+    </form>
     <svg width="960" height="500"></svg>
     <p></p>
 </body>
@@ -41,32 +60,33 @@
 
     // 2013-07-15 16:28:28.087000000
 
-    d3.csv("test.csv", function (d) {
+    d3.csv("dib.csv", function (d) {
         d['ListingCreationDate'] = new Date(d['ListingCreationDate'])
         // d.frequency = +d.frequency;
         return d;
     }).then(function (data) {
         d3.select("h1")
             .text("Prosper Loan");
-        x.domain(data.map(function (d) { return d.ListingCreationDate; }));
-        y.domain([0, d3.max(data, function (d) { return d.BorrowerRate; })]);
-
 
         var nested = d3.nest()
             .key(function (d) {
                 return d['ListingCreationDate'].getUTCFullYear();
             })
+            .sortKeys(d3.ascending)
             .rollup(function (leaves) {
-
-                var total = d3.mean(leaves, function (d) {
+                var mean_BorrowerRate = d3.mean(leaves, function (d) {
                     return d['BorrowerRate'];
                 });
-
                 return {
-                    'kk': total,
+                    'mean_BorrowerRate': mean_BorrowerRate,
                 };
             })
             .entries(data);
+        console.log(JSON.stringify(nested));
+
+        x.domain(nested.map(function (d) { return d.key; }));
+        y.domain([0, d3.max(nested, function (d) { return d.value.mean_BorrowerRate; })]);
+
 
         g.append("g")
             .attr("class", "axis axis--x")
@@ -84,13 +104,15 @@
             .text("BorrowerRate");
 
         g.selectAll(".bar")
-            .data(data)
+            .data(nested)
             .enter().append("rect")
             .attr("class", "bar")
-            .attr("x", function (d) { return x(d.ListingCreationDate); })
-            .attr("y", function (d) { return y(d.kk); })
+            .attr("x", function (d) { return x(d.key); })
+            .attr("y", function (d) {
+                return y(d.value.mean_BorrowerRate);
+            })
             .attr("width", x.bandwidth())
-            .attr("height", function (d) { return height - y(d.kk); });
+            .attr("height", function (d) { return height - y(d.value.mean_BorrowerRate); });
     });
 
 
