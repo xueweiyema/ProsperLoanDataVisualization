@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
 <style>
-
     label {
         display: block;
     }
@@ -22,57 +21,109 @@
         text-align: center;
         color: black;
     }
+
+    .d3-tip {
+        line-height: 1;
+        font-weight: bold;
+        padding: 12px;
+        background: rgba(0, 0, 0, 0.8);
+        color: #fff;
+        border-radius: 2px;
+    }
+
+    .d3-tip:after {
+        box-sizing: border-box;
+        display: inline;
+        font-size: 10px;
+        line-height: 1;
+        color: rgba(0, 0, 0, 0.8);
+        content: "\25BC";
+        position: absolute;
+        text-align: center;
+    }
+
+    /* Style northward tooltips differently */
+
+    .d3-tip.n:after {
+        margin: -1px 0 0 0;
+        top: 100%;
+        left: 0;
+    }
 </style>
 
 <body>
     <h1></h1>
     <form>
+
         <label>
-            <input type="radio" name="mode" value="grouped"> Grouped</label>
+            <input type="radio" name="mode" value="$a" checked> 2011年-2014年</label>
         <label>
-            <input type="radio" name="mode" value="stacked" checked> Stacked</label>
+            <input type="radio" name="mode" value="$0"> 2011年</label>
         <label>
-            <input type="radio" name="mode" value="grouped"> Grouped</label>
+            <input type="radio" name="mode" value="$1"> 2012年</label>
         <label>
-            <input type="radio" name="mode" value="stacked"> Stacked</label>
+            <input type="radio" name="mode" value="$2"> 2013年</label>
         <label>
-            <input type="radio" name="mode" value="grouped"> Grouped</label>
+            <input type="radio" name="mode" value="$5"> 2014年</label>
         <label>
-            <input type="radio" name="mode" value="stacked"> Stacked</label>
     </form>
+    <h4></h4>
     <svg width="960" height="500"></svg>
     <p></p>
 </body>
 <script src="./d3.min.js"></script>
+<script src="./d3-Tooltips.js"></script>
 <!-- <script src="https://d3js.org/d3.v4.min.js"></script> -->
 <script>
-
     var svg = d3.select("svg"),
-        margin = { top: 20, right: 20, bottom: 30, left: 40 },
+        margin = {
+            top: 20,
+            right: 20,
+            bottom: 30,
+            left: 40
+        },
         width = +svg.attr("width") - margin.left - margin.right,
         height = +svg.attr("height") - margin.top - margin.bottom;
 
+    // 设置图像位置
     var x = d3.scaleBand().rangeRound([0, width]).padding(0.1),
         y = d3.scaleLinear().rangeRound([height, 0]);
-
+    var n = 4
     var g = svg.append("g")
         .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-    // 2013-07-15 16:28:28.087000000
 
     d3.csv("dib.csv", function (d) {
-        d['ListingCreationDate'] = new Date(d['ListingCreationDate'])
+        // d['ListingCreationDate'] = new Date(d['ListingCreationDate'])
         // d.frequency = +d.frequency;
         return d;
     }).then(function (data) {
         d3.select("h1")
             .text("Prosper Loan");
+        d3.select("h4")
+            .text("Mean BorrowerRate");
+
+        // 根据不同的年份来切换收入比率图
+        function changed() {
+            showbar(this.value)
+        }
+
+        //绑定radio切换
+        d3.selectAll("input")
+            .on("change", changed);
+
+        var priority_order = ['$0', '$1-24,999', '$25,000-49,999', '$50,000-74,999', '$75,000-99,999',
+            '$100,000+'
+        ];
 
         var nested = d3.nest()
             .key(function (d) {
-                return d['ListingCreationDate'].getUTCFullYear();
+                return d['IncomeRange'];
             })
-            .sortKeys(d3.ascending)
+            // .sortKeys(d3.ascending)
+            .sortKeys(function (a, b) {
+                return priority_order.indexOf(a) - priority_order.indexOf(b);
+            })
             .rollup(function (leaves) {
                 var mean_BorrowerRate = d3.mean(leaves, function (d) {
                     return d['BorrowerRate'];
@@ -84,10 +135,27 @@
             .entries(data);
         console.log(JSON.stringify(nested));
 
-        x.domain(nested.map(function (d) { return d.key; }));
-        y.domain([0, d3.max(nested, function (d) { return d.value.mean_BorrowerRate; })]);
 
+        x.domain(nested.map(function (d) {
+            return d.key;
+        }));
+        y.domain([0, d3.max(nested, function (d) {
+            // return d.value.mean_BorrowerRate;
+            return 0.5
+        })]);
 
+        //定义tip组建
+        var tip = d3.tip()
+            .attr('class', 'd3-tip')
+            .offset([-10, 0])
+            .html(function (d) {
+                return "<strong>Mean BorrowerRate:</strong> <span style='color:red'>" + d.value.mean_BorrowerRate +
+                    "</span>";
+            })
+
+        svg.call(tip);
+
+        //画坐标系
         g.append("g")
             .attr("class", "axis axis--x")
             .attr("transform", "translate(0," + height + ")")
@@ -103,26 +171,95 @@
             .attr("text-anchor", "end")
             .text("BorrowerRate");
 
+
+        // 展现柱状图
+        function showbar(radio_value = '$a') {
+            var shownested = d3.nest()
+                .key(function (d) {
+                    return d['IncomeRange'];
+                })
+                .sortKeys(function (a, b) {
+                    return priority_order.indexOf(a) - priority_order.indexOf(b);
+                })
+                .rollup(function (leaves) {
+                    var mean_BorrowerRate = d3.mean(leaves, function (d) {
+
+                        switch (radio_value) {
+                            case '$a':
+                                return d['BorrowerRate']
+                                break;
+                            case '$0':
+                                if (d['Year'] == '2011')
+                                    return d['BorrowerRate']
+                                break;
+                            case '$1':
+                                if (d['Year'] == '2012')
+                                    return d['BorrowerRate']
+                                break;
+                            case '$2':
+                                if (d['Year'] == '2013')
+                                    return d['BorrowerRate']
+                                break;
+                            case '$5':
+                                if (d['Year'] == '2014')
+                                    return d['BorrowerRate']
+                                break;
+                            default:
+
+                        }
+                    });
+                    return {
+                        'mean_BorrowerRate': mean_BorrowerRate,
+                    };
+                })
+                .entries(data);
+            console.log(JSON.stringify(shownested));
+
+
+            //一开始默认的全量柱状图
+            g.selectAll(".bar")
+                .data(shownested)
+
+                .attr("x", function (d) {
+                    return x(d.key);
+                })
+                .attr("y", function (d) {
+                    return y(d.value.mean_BorrowerRate);
+                })
+                .on('mouseover', tip.show)
+                .on('mouseout', tip.hide)
+                .attr("width", x.bandwidth())
+                .attr("height", 0)
+                .transition()
+                .duration(200)
+                .delay(function (d, i) {
+                    return i * 50;
+                })
+                .attr("height", function (d) {
+                    return height - y(d.value.mean_BorrowerRate);
+                })
+        }
         g.selectAll(".bar")
             .data(nested)
             .enter().append("rect")
             .attr("class", "bar")
-            .attr("x", function (d) { return x(d.key); })
+            .attr("x", function (d) {
+                return x(d.key);
+            })
             .attr("y", function (d) {
                 return y(d.value.mean_BorrowerRate);
             })
+            .on('mouseover', tip.show)
+            .on('mouseout', tip.hide)
             .attr("width", x.bandwidth())
-            .attr("height", function (d) { return height - y(d.value.mean_BorrowerRate); });
+            .attr("height", 0)
+            .transition()
+            .duration(200)
+            .delay(function (d, i) {
+                return i * 50;
+            })
+            .attr("height", function (d) {
+                return height - y(d.value.mean_BorrowerRate);
+            })
     });
-
-
-      // d3.select("body")
-      //     .selectAll("p")
-      //     .data([4, 8, 15, 16, 23, 42])
-      //     .enter()
-      //     .append("p")
-    //     .text(function (d) { return "I’m number " + d + "!"; });
-        // d3.select("body").transition()
-        // .style("background-color", "black");
-
 </script>
